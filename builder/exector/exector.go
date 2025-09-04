@@ -258,6 +258,8 @@ func (e *exectorManager) RunTask(task *pb.TaskMessage) {
 		go e.runTask(e.imageShare, task, false)
 	case "garbage-collection":
 		go e.runTask(e.garbageCollection, task, false)
+	case "build_from_kubeblocks":
+		go e.runTask(e.buildFromKubeBlocks, task, false)
 	default:
 		go e.runTaskWithErr(e.exec, task, false)
 	}
@@ -483,6 +485,61 @@ func (e *exectorManager) buildFromMarketSlug(task *pb.TaskMessage) {
 
 }
 
+// buildFromKubeBlocks builds app from KubeBlocks components
+func (e *exectorManager) buildFromKubeBlocks(task *pb.TaskMessage) {
+	// 从 task.TaskBody 解析参数
+	serviceID := gjson.GetBytes(task.TaskBody, "service_id").String()
+	tenantID := gjson.GetBytes(task.TaskBody, "tenant_id").String()
+	eventID := gjson.GetBytes(task.TaskBody, "event_id").String()
+	deployVersion := gjson.GetBytes(task.TaskBody, "deploy_version").String()
+	action := gjson.GetBytes(task.TaskBody, "action").String()
+	
+	// 获取日志记录器
+	logger := event.GetManager().GetLogger(eventID)
+	logger.Info("Start with the KubeBlocks application task", map[string]string{"step": "builder-exector", "status": "starting"})
+	
+	defer event.GetManager().ReleaseLogger(logger)
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r)
+			debug.PrintStack()
+			logger.Error("KubeBlocks build task failed", map[string]string{"step": "callback", "status": "failure"})
+		}
+	}()
+	
+	// 参数校验
+	if serviceID == "" {
+		logger.Error("Service ID is required for KubeBlocks component", map[string]string{"step": "builder-exector", "status": "failure"})
+		return
+	}
+	if deployVersion == "" {
+		logger.Error("Deploy version is required for KubeBlocks component", map[string]string{"step": "builder-exector", "status": "failure"})
+		return
+	}
+	
+	var configs = make(map[string]string)
+	if configsJson := gjson.GetBytes(task.TaskBody, "configs"); configsJson.Exists() {
+		configsJson.ForEach(func(key, value gjson.Result) bool {
+			configs[key.String()] = value.String()
+			return true
+		})
+	}
+	
+	if err := e.UpdateDeployVersion(serviceID, deployVersion); err != nil {
+		logger.Error("Update KubeBlocks deploy version failed", map[string]string{"step": "builder-exector", "status": "failure"})
+		logrus.Errorf("Update KubeBlocks service deploy version failure %s", err.Error())
+		return
+	}
+	
+	err := e.sendAction(tenantID, serviceID, eventID, deployVersion, action, configs, logger)
+	if err != nil {
+		logger.Error("Send KubeBlocks deployment action failed", map[string]string{"step": "callback", "status": "failure"})
+		logrus.Errorf("Send KubeBlocks action failed: %s", err.Error())
+	} else {
+		logger.Info("KubeBlocks component deployment triggered successfully", map[string]string{"step": "last", "status": "success"})
+	}
+}
+
 // rollingUpgradeTaskBody upgrade message body type
 type rollingUpgradeTaskBody struct {
 	TenantID  string   `json:"tenant_id"`
@@ -656,3 +713,5 @@ func (e *exectorManager) GetCurrentConcurrentTask() float64 {
 func (e *exectorManager) UpdateDeployVersion(serviceID, newVersion string) error {
 	return db.GetManager().TenantServiceDao().UpdateDeployVersion(serviceID, newVersion)
 }
+
+

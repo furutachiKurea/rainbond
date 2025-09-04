@@ -97,6 +97,10 @@ func updateAPISixRoute(as *v1.AppService) error {
 
 // TenantServiceVersion service deploy version conv. define pod spec
 func TenantServiceVersion(as *v1.AppService, dbmanager db.Manager) error {
+	if as.ServiceType == v1.TypeKubeBlocks {
+		return nil
+	}
+
 	version, err := dbmanager.VersionInfoDao().GetVersionByDeployVersion(as.DeployVersion, as.ServiceID)
 	if err != nil {
 		return fmt.Errorf("get service deploy version %s failure %s", as.DeployVersion, err.Error())
