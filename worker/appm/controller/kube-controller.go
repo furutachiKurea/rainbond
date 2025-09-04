@@ -21,6 +21,7 @@ package controller
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,9 +31,11 @@ import (
 //CreateKubeService create kube service
 func CreateKubeService(client kubernetes.Interface, namespace string, services ...*corev1.Service) error {
 	var retryService []*corev1.Service
+	logrus.Infof("kubeblocks: create services: %v", services)
 	for i := range services {
 		createService := services[i]
 		if _, err := client.CoreV1().Services(namespace).Create(context.Background(), createService, metav1.CreateOptions{}); err != nil {
+			logrus.Infof("kubeblocks: create service: %v", createService)
 			// Ignore if the Service is invalid with this error message:
 			// 	Service "kube-dns" is invalid: spec.clusterIP: Invalid value: "10.96.0.10": provided IP is already allocated
 			if !errors.IsAlreadyExists(err) && !errors.IsInvalid(err) {

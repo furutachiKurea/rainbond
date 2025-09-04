@@ -94,6 +94,7 @@ func (s *startController) errorCallback(app v1.AppService) error {
 }
 
 func (s *startController) startOne(app v1.AppService) error {
+	logrus.Infof("kubeblocks: startOne: %v", app)
 	//first: check and create namespace
 	_, err := s.manager.client.CoreV1().Namespaces().Get(s.ctx, app.GetNamespace(), metav1.GetOptions{})
 	if err != nil {
@@ -169,6 +170,8 @@ func (s *startController) startOne(app v1.AppService) error {
 	}
 	//step 3: create services
 	if services := app.GetServices(true); services != nil {
+		// TODO
+		logrus.Infof("kubeblocks: get services: %v", services)
 		if err := CreateKubeService(s.manager.client, app.GetNamespace(), services...); err != nil {
 			return fmt.Errorf("create service failure %s", err.Error())
 		}

@@ -602,6 +602,7 @@ func (a *appRuntimeStore) OnAdd(obj interface{}) {
 				}
 			}
 		}
+		// TODO
 		serviceID := service.Labels["service_id"]
 		version := service.Labels["version"]
 		createrID := service.Labels["creater_id"]
@@ -610,9 +611,11 @@ func (a *appRuntimeStore) OnAdd(obj interface{}) {
 		if serviceID != "" && createrID != "" {
 			appservice, err := a.getAppService(serviceID, version, createrID, true)
 			if err == conversion.ErrServiceNotFound {
+				logrus.Infof("kubeblocks: delete service: %v", service)
 				a.k8sClient.Clientset.CoreV1().Services(service.Namespace).Delete(context.Background(), service.Name, metav1.DeleteOptions{})
 			}
 			if appservice != nil {
+				logrus.Infof("kubeblocks: appservice != nil: %v", appservice)
 				a.SyncUpdateApisixRoute(service.Namespace, serviceAlias, service.Name)
 				appservice.SetService(service)
 				return
@@ -755,11 +758,12 @@ func (a *appRuntimeStore) OnAdd(obj interface{}) {
 func (a *appRuntimeStore) getAppService(serviceID, version, createrID string, creator bool) (*v1.AppService, error) {
 	var appservice *v1.AppService
 	appservice = a.GetAppService(serviceID)
+	logrus.Infof("kubeblocks: getAppService: GetAppService: %v", appservice)
 	if appservice == nil && creator {
 		var err error
 		appservice, err = conversion.InitCacheAppService(a.dbmanager, serviceID, createrID)
 		if err != nil {
-			logrus.Debugf("init cache app service %s failure:%s ", serviceID, err.Error())
+			logrus.Infof("init cache app service %s failure:%s ", serviceID, err.Error())
 			return nil, err
 		}
 		a.RegistAppService(appservice)
